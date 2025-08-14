@@ -35,20 +35,25 @@
         color: #333;
         font-size: 16px;
       }
-      .back-button {
+      /* 將原本 .back-button 的樣式套用到新的按鈕上 */
+      .return-to-store-button {
+        /* 新的 class 名稱 */
         display: block;
         width: 200px;
         margin: 30px auto 0;
         padding: 12px 24px;
         background-color: #00b7ff;
         color: white;
-        text-decoration: none;
+        text-decoration: none; /* 確保沒有下劃線 */
         text-align: center;
         border-radius: 5px;
         font-size: 16px;
         transition: background-color 0.3s;
+        border: none; /* 確保沒有邊框 */
+        cursor: pointer; /* 讓它看起來像可點擊的按鈕 */
       }
-      .back-button:hover {
+      .return-to-store-button:hover {
+        /* 新的 class 名稱 */
         background-color: #0099cc;
       }
       .status-success {
@@ -108,7 +113,12 @@
         </div>
       </div>
 
-      <a href="/" class="back-button">返回首頁</a>
+      <button
+        onclick="window.location.href='http://localhost:8080/ecpay-complete.html'"
+        class="return-to-store-button"
+      >
+        返回商店
+      </button>
 
       <% if (query && Object.keys(query).length) { %>
       <pre
@@ -120,8 +130,8 @@
           overflow: auto;
         "
       >
- <%= JSON.stringify(query, null, 2) %>
-       </pre
+<%= JSON.stringify(query, null, 2) %>
+        </pre
       >
       <% } %>
     </div>
