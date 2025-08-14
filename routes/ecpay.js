@@ -132,12 +132,12 @@ router.post("/return", async (req, res, next) => {
 });
 
 // ✅ n8n → Node.js 的內部通知端點（寫庫或轉發給 Spring 用）==
-router.post('/notify', async (req, res, next) => {
+router.post("/notify", async (req, res, next) => {
   try {
     // 1) 檢查自訂安全頭（跟 .env 的 NOTIFY_SECRET 必須一致）
-    const token = req.get('x-webhook-token');
+    const token = req.get("x-webhook-token");
     if (token !== process.env.NOTIFY_SECRET) {
-      return res.status(403).send('Forbidden'); // 驗證失敗
+      return res.status(403).send("Forbidden"); // 驗證失敗
     }
 
     // 2) 拿到 n8n 轉來的表單資料（n8n 設的是 form-urlencoded）
@@ -145,46 +145,44 @@ router.post('/notify', async (req, res, next) => {
     // 這些鍵要和你在 n8n HTTP Request node「Body Parameters」送的一致
     const payload = {
       MerchantTradeNo: p.MerchantTradeNo,
-      TradeNo:        p.TradeNo,
-      RtnCode:        p.RtnCode,
-      RtnMsg:         p.RtnMsg,
-      TradeAmt:       p.TradeAmt,
-      PaymentDate:    p.PaymentDate,
-      PaymentType:    p.PaymentType,
+      TradeNo: p.TradeNo,
+      RtnCode: p.RtnCode,
+      RtnMsg: p.RtnMsg,
+      TradeAmt: p.TradeAmt,
+      PaymentDate: p.PaymentDate,
+      PaymentType: p.PaymentType,
       PaymentTypeChargeFee: p.PaymentTypeChargeFee,
-      SimulatePaid:   p.SimulatePaid,
+      SimulatePaid: p.SimulatePaid,
     };
 
-    console.log('[notify] received from n8n:', payload);
+    console.log("[notify] received from n8n:", payload);
 
     // 3) 在這裡做你要的事：
     //    - 寫入你自己的 DB
     //    - 或者轉發給 Spring Boot
     //    下方是「轉發給 Spring」的範例（可選）：
-    
+
     const r = await fetch(`${SPRING_BASE}/api/payments/notify`, {
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
-        'x-webhook-token': process.env.NOTIFY_SECRET, // 可一起驗
+        "Content-Type": "application/json",
+        "x-webhook-token": process.env.NOTIFY_SECRET, // 可一起驗
       },
       body: JSON.stringify(payload),
     });
     if (!r.ok) {
       const txt = await r.text();
-      console.error('forward to Spring failed:', r.status, txt);
+      console.error("forward to Spring failed:", r.status, txt);
       // 不要擋住 n8n：仍回 200 避免重送風暴
     }
-    
 
     // 4) 告知 n8n 已收妥（200 即可；不用回 "1|OK"）
-    return res.status(200).send('ok');
+    return res.status(200).send("ok");
   } catch (err) {
     next(err);
   }
 });
 //===============================================
-
 
 /** 使用者導回頁 */
 router.get("/clientReturn", (req, res, next) => {
