@@ -8,7 +8,11 @@ const ECPayService = require("../services/ecpayService");
 // 讀取環境變數
 const { MERCHANTID, HASHKEY, HASHIV, RETURN_URL, CLIENT_BACK_URL } =
   process.env;
-const SPRING_BASE = process.env.SPRING_BASE || "http://localhost:8080"; // 👈 你的 Spring 位址
+const SPRING_BASE = process.env.SPRING_BASE || "http://localhost:8080";
+
+// ✅ 新增：控制導回頁的開關（1=回 Node 測試頁；0/未設=回 Spring 完成頁）
+const USE_NODE_RETURN = process.env.USE_NODE_RETURN === "1";
+const NODE_BASE = process.env.NODE_BASE || "http://localhost:3000";
 
 // 檢查必要參數
 if (!MERCHANTID || !HASHKEY || !HASHIV || !RETURN_URL || !CLIENT_BACK_URL) {
@@ -39,81 +43,48 @@ router.get("/", async (req, res, next) => {
 });
 
 /**
- * 購物車送單 → 先向 Spring 建單 → 產生綠界表單
+ * 購物車送單 → 產生綠界表單
  * POST /ecpay/checkout
- * body: { amount, itemName, userId? }
+ * body: { amount, itemName }
  */
-/*==測試完再開==
 router.post("/checkout", async (req, res, next) => {
   try {
-    const { amount, itemName, userId } = req.body;
+    const { amount, itemName } = req.body;
 
     // 1) 基本驗證
     const amt = Number(amount);
     if (!amt || amt <= 0) return res.status(400).send("金額不合法");
     const safeItemName = (itemName || "未命名商品").toString().slice(0, 50);
 
-    // 2) 向 Spring 建一筆訂單，拿到 orderId
-    const r = await fetch(`${SPRING_BASE}/api/orders`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ amount: amt, itemName: safeItemName, userId }),
-    });
-    const data = await r.json();
-    if (!r.ok || !data?.orderId) {
-      const msg = typeof data === "object" ? JSON.stringify(data) : String(data);
-      throw new Error(`建立訂單失敗：${msg}`);
+    // 2) 依環境變數決定「導回頁」
+    const overrides = USE_NODE_RETURN
+      ? { ClientBackURL: `${NODE_BASE}/ecpay/clientReturn` } // 測試：回 Node 頁
+      : {}; // 正式：用 Zeabur 的 CLIENT_BACK_URL（回 Spring）
+
+    // 3) 產生 ECPay 參數
+    const params = ecpayService.generatePaymentParams(
+      amt,
+      "購物車結帳",
+      safeItemName,
+      overrides
+    );
+
+    if (USE_NODE_RETURN) {
+      console.log(
+        `[checkout] USE_NODE_RETURN=1 → 導回 ${NODE_BASE}/ecpay/clientReturn`
+      );
+    } else {
+      console.log(`[checkout] USE_NODE_RETURN=0 → 導回 ${CLIENT_BACK_URL}`);
     }
-    const orderId = data.orderId;
 
-    // 3) 產生 ECPay 參數：把 orderId 放在 CustomField1，並在導回頁夾帶 orderId
-    const params = ecpayService.generatePaymentParams(
-      amt,
-      "購物車結帳",
-      safeItemName,
-      {
-        CustomField1: String(orderId),
-        ClientBackURL: `${CLIENT_BACK_URL}?orderId=${orderId}`,
-      }
-    );
-
-    // 4) 生成 HTML 表單並回傳（瀏覽器會自動送出到綠界）
-    const formHtml = ecpayService.createPaymentForm(params);
-    res.setHeader("Content-Type", "text/html; charset=utf-8");
-    res.send(formHtml);
-  } catch (err) { next(err); }
-});
-*/
-
-// routes/ecpay.js（只示範 /checkout 這段）===測試段===
-const NODE_BASE = process.env.NODE_BASE || "http://localhost:3000";
-
-router.post("/checkout", async (req, res, next) => {
-  try {
-    const { amount, itemName } = req.body;
-
-    const amt = Number(amount);
-    if (!amt || amt <= 0) return res.status(400).send("金額不合法");
-
-    const safeItemName = (itemName || "未命名商品").toString().slice(0, 50);
-
-    // 👇關鍵：把導回頁改到 Node 自己的 /ecpay/clientReturn
-    const params = ecpayService.generatePaymentParams(
-      amt,
-      "購物車結帳",
-      safeItemName,
-      {
-        ClientBackURL: `${NODE_BASE}/ecpay/clientReturn`,
-      }
-    );
-
+    // 4) 回傳 HTML 表單（瀏覽器自動送綠界）
     const formHtml = ecpayService.createPaymentForm(params);
     res.type("html").send(formHtml);
   } catch (err) {
     next(err);
   }
 });
-//===============================================
+
 /** 綠界 Server-to-Server 回傳 */
 router.post("/return", async (req, res, next) => {
   try {
@@ -122,7 +93,7 @@ router.post("/return", async (req, res, next) => {
     }
     const result = ecpayService.verifyCheckMacValue(req.body);
     if (result.isValid) {
-      // TODO：之後可在這裡回寫 Spring / DB（目前先保持不動）
+      // TODO：此處可寫 DB / 轉發 Spring（目前先回 1|OK）
       return res.send("1|OK");
     }
     res.status(400).send("簽章驗證失敗");
@@ -131,18 +102,17 @@ router.post("/return", async (req, res, next) => {
   }
 });
 
-// ✅ n8n → Node.js 的內部通知端點（寫庫或轉發給 Spring 用）==
+// ✅ n8n → Node.js 的內部通知端點（寫庫或轉發給 Spring 用）
 router.post("/notify", async (req, res, next) => {
   try {
-    // 1) 檢查自訂安全頭（跟 .env 的 NOTIFY_SECRET 必須一致）
+    // 1) 驗安全頭
     const token = req.get("x-webhook-token");
     if (token !== process.env.NOTIFY_SECRET) {
-      return res.status(403).send("Forbidden"); // 驗證失敗
+      return res.status(403).send("Forbidden");
     }
 
-    // 2) 拿到 n8n 轉來的表單資料（n8n 設的是 form-urlencoded）
+    // 2) 拿到 n8n 轉來的 form-urlencoded 資料
     const p = req.body || {};
-    // 這些鍵要和你在 n8n HTTP Request node「Body Parameters」送的一致
     const payload = {
       MerchantTradeNo: p.MerchantTradeNo,
       TradeNo: p.TradeNo,
@@ -157,34 +127,29 @@ router.post("/notify", async (req, res, next) => {
 
     console.log("[notify] received from n8n:", payload);
 
-    // 3) 在這裡做你要的事：
-    //    - 寫入你自己的 DB
-    //    - 或者轉發給 Spring Boot
-    //    下方是「轉發給 Spring」的範例（可選）：
-
+    // 3) 例：轉發給 Spring（可改為直接寫 DB）
     const r = await fetch(`${SPRING_BASE}/api/payments/notify`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-webhook-token": process.env.NOTIFY_SECRET, // 可一起驗
+        "x-webhook-token": process.env.NOTIFY_SECRET,
       },
       body: JSON.stringify(payload),
     });
     if (!r.ok) {
       const txt = await r.text();
       console.error("forward to Spring failed:", r.status, txt);
-      // 不要擋住 n8n：仍回 200 避免重送風暴
+      // 仍回 200 避免重送風暴
     }
 
-    // 4) 告知 n8n 已收妥（200 即可；不用回 "1|OK"）
+    // 4) 告知 n8n 已收妥
     return res.status(200).send("ok");
   } catch (err) {
     next(err);
   }
 });
-//===============================================
 
-/** 使用者導回頁 */
+/** 使用者導回頁（僅測試用） */
 router.get("/clientReturn", (req, res, next) => {
   try {
     res.render("return", {
