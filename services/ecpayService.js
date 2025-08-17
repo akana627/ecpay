@@ -41,7 +41,7 @@ class ECPayService {
   // 簡單清洗商品名稱/描述，避免特殊字或過長
   sanitizeText(input, max = 200) {
     const s = (input || "").toString().trim();
-    return s.replace(/[^\w\u4e00-\u9fa5\s\-\+\(\)\*\.,\/]/g, "").slice(0, max);
+    return s.replace(/[^\w\u4e00-\u9fa5\s\-\+\(\)\*\.,\/#]/g, "").slice(0, max);
   }
 
   // 產生送綠界的欄位（補上必要欄位）
