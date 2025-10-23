@@ -10,7 +10,7 @@ const { MERCHANTID, HASHKEY, HASHIV, RETURN_URL, CLIENT_BACK_URL } =
   process.env;
 const SPRING_BASE = process.env.SPRING_BASE || "http://localhost:8080";
 
-// ✅ 新增：控制導回頁的開關（1=回 Node 測試頁；0/未設=回 Spring 完成頁）
+// 控制導回頁的開關（1=回 Node 測試頁；0/未設=回 Spring 完成頁）
 const USE_NODE_RETURN = process.env.USE_NODE_RETURN === "1";
 const NODE_BASE = process.env.NODE_BASE || "http://localhost:3000";
 
@@ -31,7 +31,7 @@ const ecpayService = new ECPayService({
   ClientBackURL: CLIENT_BACK_URL,
 });
 
-/** 測試頁（可選） */
+/** 測試頁 **/
 router.get("/", async (req, res, next) => {
   try {
     const params = ecpayService.generatePaymentParams();
@@ -102,7 +102,7 @@ router.post("/return", async (req, res, next) => {
   }
 });
 
-// ✅ n8n → Node.js 的內部通知端點（寫庫或轉發給 Spring 用）
+// n8n → Node.js 的內部通知端點（寫庫或轉發給 Spring 用）
 router.post("/notify", async (req, res, next) => {
   try {
     // 1) 驗安全頭

@@ -63,13 +63,13 @@ class ECPayService {
       TradeDesc: this.sanitizeText(description, 200),
       ItemName: this.sanitizeText(itemName, 200),
 
-      // 你的回呼/導回
+      // 回呼/導回
       ReturnURL: this.ReturnURL,
       ClientBackURL: this.ClientBackURL,
 
-      // ✅ 綠界 AioCheckOut 必備欄位
+      // 綠界 AioCheckOut 必要欄位
       ChoosePayment: "ALL", // 或 'Credit'，先用 ALL 比較好測
-      EncryptType: 1, // ✅ 使用 SHA256 時固定為 1
+      EncryptType: 1, //  使用 SHA256 時固定為 1
 
       // （可選）
       // NeedExtraPaidInfo: 'Y',
